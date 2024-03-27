@@ -14,6 +14,7 @@ def make_library(dtype=ti.f32):
   vec2 = ti.types.vector(2, dtype)
   vec3 = ti.types.vector(3, dtype)
   vec4 = ti.types.vector(4, dtype)
+  vec6 = ti.types.vector(6, dtype)
 
   mat2 = ti.types.matrix(2, 2, dtype)
   mat3 = ti.types.matrix(3, 3, dtype)
@@ -50,8 +51,16 @@ def make_library(dtype=ti.f32):
           return ti.math.exp(self.log_scaling)
 
 
+  @ti.dataclass
+  class GaussianFD:
+      postion   : vec3
+      cov       : vec6
+      alpha     : dtype
+
+
   vec_g2d = ti.types.vector(struct_size(Gaussian2D), dtype=dtype)
   vec_g3d = ti.types.vector(struct_size(Gaussian3D), dtype=dtype)
+  vec_gfd = ti.types.vector(struct_size(GaussianFD), dtype=dtype)
 
 
   @ti.func
@@ -61,6 +70,10 @@ def make_library(dtype=ti.f32):
   @ti.func
   def to_vec_g3d(position:vec3, log_scaling:vec3, rotation:vec4, alpha_logit:dtype) -> vec_g3d:
     return vec_g3d(*position, *log_scaling, *rotation, alpha_logit)
+  
+  @ti.func
+  def to_vec_gfd(position:vec3, cov:vec6, alpha:dtype) -> vec_gfd:
+    return vec_gfd(*position, *cov, alpha)
 
 
   @ti.func
@@ -70,10 +83,22 @@ def make_library(dtype=ti.f32):
   @ti.func
   def unpack_vec_g2d(vec:vec_g2d) -> Gaussian2D:
     return vec[0:2], vec[2:5], vec[5]
+  
+  @ti.func
+  def unpack_vec_gfd(vec:vec_gfd) -> GaussianFD:
+    return vec[0:3], vec[3:9], vec[9]
 
   @ti.func
   def get_position_g3d(vec:vec_g3d) -> vec3:
     return vec[0:3]
+  
+  @ti.func
+  def get_position_gfd(vec:vec_gfd) -> vec3:
+    return vec[0:3]
+  
+  @ti.func
+  def get_cov_gfd(vec:vec_gfd) -> vec6:
+    return vec[3:9]
 
   @ti.func
   def get_position_g2d(vec:vec_g2d) -> vec2:
@@ -92,6 +117,10 @@ def make_library(dtype=ti.f32):
   @ti.func
   def from_vec_g3d(vec:vec_g3d) -> Gaussian3D:
     return Gaussian3D(vec[0:3], vec[3:6], vec[6:10], vec[10])
+
+  @ti.func
+  def from_vec_gfd(vec:vec_gfd) -> GaussianFD:
+    return GaussianFD(vec[0:3], vec[3:9], vec[9])
 
   @ti.func
   def from_vec_g2d(vec:vec_g2d) -> Gaussian2D:
@@ -130,7 +159,12 @@ def make_library(dtype=ti.f32):
   Gaussian3D.get_position = get_position_g3d
   Gaussian3D.bounding_sphere = bounding_sphere
 
-
+  GaussianFD.vec = vec_gfd
+  GaussianFD.to_vec = to_vec_gfd
+  GaussianFD.from_vec = from_vec_gfd
+  GaussianFD.unpack = unpack_vec_gfd
+  GaussianFD.get_position = get_position_gfd
+  GaussianFD.get_cov = get_cov_gfd
 
   #
   # Projection related functions
@@ -188,7 +222,24 @@ def make_library(dtype=ti.f32):
       
       m = W @ R @ S
       return m @ m.transpose() 
-
+  
+  @ti.func
+  def gaussian_covariance_in_camera_cov(
+      T_camera_world: mat4,
+      cov: vec6,
+  ) -> mat3:
+      """ Construct the covariance matrix in camera space
+      """
+      
+      W = T_camera_world[:3, :3]
+      a, b, c, d, e, f = cov
+      RS = mat3([
+          [a, b, c],
+          [b, d, e],
+          [c, e, f]
+      ])
+      m = W @ RS
+      return m @ m.transpose()
 
   @ti.func
   def get_projective_transform_jacobian(

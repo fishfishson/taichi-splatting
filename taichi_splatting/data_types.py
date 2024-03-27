@@ -37,11 +37,11 @@ def check_packed2d(packed_gaussians: torch.Tensor):
 
 @tensorclass
 class Gaussians3D():
-  position     : torch.Tensor # 3  - xyz
-  log_scaling   : torch.Tensor # 3  - scale = exp(log_scalining) 
+  position      : torch.Tensor # 3  - xyz
+  log_scaling   : torch.Tensor # 3  - scale = exp(log_scalining)
   rotation      : torch.Tensor # 4  - quaternion wxyz
   alpha_logit   : torch.Tensor # 1  - alpha = sigmoid(alpha_logit)
-  feature      : torch.Tensor # (any rgb (3), spherical harmonics (3x16) etc)
+  feature       : torch.Tensor # (any rgb (3), spherical harmonics (3x16) etc)
 
 
   def __post_init__(self):
@@ -70,6 +70,34 @@ class Gaussians3D():
     self.log_scaling.requires_grad_(requires_grad)
     self.rotation.requires_grad_(requires_grad)
     self.alpha_logit.requires_grad_(requires_grad)
+    self.feature.requires_grad_(requires_grad)
+    return self
+  
+  def replace(self, **kwargs):
+    return replace(self, **kwargs, batch_size=self.batch_size)
+
+@tensorclass
+class GaussiansFD():
+  position      : torch.Tensor # 3  - xyz
+  cov           : torch.Tensor # 6  - cov
+  alpha         : torch.Tensor # 1  - alpha
+  feature       : torch.Tensor # (any rgb (3), spherical harmonics (3x16) etc)
+
+  def __post_init__(self):
+    assert self.position.shape[1] == 3, f"Expected shape (N, 3), got {self.position.shape}"
+    assert self.cov.shape[1] == 6, f"Expected shape (N, 6), got {self.cov.shape}"
+    assert self.alpha.shape[1] == 1, f"Expected shape (N, 1), got {self.alpha.shape}"
+
+  def packed(self):
+    return torch.cat([self.position, self.cov, self.alpha], dim=-1)
+  
+  def shape_tensors(self):
+    return (self.position, self.cov, self.alpha)
+
+  def requires_grad_(self, requires_grad):
+    self.position.requires_grad_(requires_grad)
+    self.cov.requires_grad_(requires_grad)
+    self.alpha.requires_grad_(requires_grad)
     self.feature.requires_grad_(requires_grad)
     return self
   

@@ -2,10 +2,10 @@
 
 from dataclasses import dataclass
 from beartype import beartype
-from beartype.typing import Optional, Tuple
+from beartype.typing import Optional, Tuple, Union
 import torch
 
-from taichi_splatting.data_types import Gaussians3D
+from taichi_splatting.data_types import Gaussians3D, GaussiansFD
 from taichi_splatting.misc.depth_variance import compute_depth_variance
 from taichi_splatting.misc.encode_depth import encode_depth
 from taichi_splatting.misc.radius import compute_radius
@@ -52,7 +52,7 @@ class Rendering:
 
 @beartype
 def render_gaussians(
-  gaussians: Gaussians3D,
+  gaussians: Union[Gaussians3D, GaussiansFD],
   camera_params: CameraParams, 
   config:RasterConfig = RasterConfig(),      
   use_sh:bool = False,      
